@@ -1,0 +1,16 @@
+{
+	"name": "Fullsize Image",
+	"description": "Fullsize Image plugin makes your image fit to the browser's viewport.",
+	"version": "1.0",
+	"manifest_version": 3,
+
+	"permissions": ["activeTab", "scripting", "webRequest", "storage"],
+	"host_permissions": ["https://*/*", "http://*/*"],
+
+	"background": {
+		"service_worker": "action.js"
+	},
+	"action": {
+		"default_icon": { "128": "icon-active.png" }
+	}
+}
