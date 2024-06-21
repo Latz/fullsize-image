@@ -1,6 +1,6 @@
 # Privacy policy
 
-The Bookmarker for Nextcloud browser extension ("Bookmarker for Nextcloud") provides browser bookmark functionality (“Functionality”) that works with privately controlled or otherwise accessible servers ("Third-party services") to store your bookmarks. Your bookmarks are as secure as the Third-party Services you choose to store them on.
+The Fullsize image browser extension ("Fullsize Image") provides functionality (“Functionality”) that works with privately controlled or otherwise accessible servers ("Third-party services") to store your bookmarks. Your bookmarks are as secure as the Third-party Services you choose to store them on.
 
 ## Information you provide
 

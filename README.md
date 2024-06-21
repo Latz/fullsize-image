@@ -5,4 +5,4 @@ The automatic resizing can be disabled by clicking the extension's icon. Not mor
 
 ## Installation
 
-Soon available in the Chrome Webstore.
+Go to the Chrome web store and click "Add to Chrome": https://chromewebstore.google.com/detail/fullsize-image/ocgclkfelcogdijknegaepbcgkbmbcib
