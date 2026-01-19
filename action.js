@@ -104,8 +104,49 @@ async function handleIconClick(tab) {
 	}
 }
 
+// Listen for tab updates to auto-enlarge images on regular pages
+async function handleTabUpdate(tabId, changeInfo, tab) {
+	// Only process when page is fully loaded and extension is active
+	if (changeInfo.status !== "complete" || state !== "active") return;
+	if (!tab.url || !tabId) return;
+
+	// Check if the page contains images and we should auto-enlarge them
+	// This runs on all pages, not just image URLs
+	try {
+		await browser.scripting.executeScript({
+			target: { tabId },
+			func: () => {
+				// Find all images on the page
+				const images = document.querySelectorAll("img");
+				images.forEach(img => {
+					// Only enlarge if image has reasonable dimensions
+					if (img.naturalWidth > 50 && img.naturalHeight > 50) {
+						// Check if it's not already enlarged
+						const currentStyle = window.getComputedStyle(img);
+						if (currentStyle.width !== "99vw") {
+							img.style.width = "99vw";
+							img.style.height = "99vh";
+							img.style.objectFit = "contain";
+							img.style.zIndex = "9999";
+							img.style.position = "fixed";
+							img.style.top = "0";
+							img.style.left = "0";
+							img.style.background = "black";
+						}
+					}
+				});
+			},
+		});
+	} catch (error) {
+		// Ignore errors - page might not have permission to access
+	}
+}
+
 // Initialize on load
 initializeState();
 
 // Add click listener
 browser.action.onClicked.addListener(handleIconClick);
+
+// Add tab update listener for auto-enlarging images
+browser.tabs.onUpdated.addListener(handleTabUpdate);
