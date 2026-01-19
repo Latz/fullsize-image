@@ -1,103 +1,111 @@
-const title = "Fullheight Image";
-let state = "active";
+// Constants
+const EXTENSION_NAME = "Fullsize Image";
+const DEFAULT_STATE = "active";
+const IMAGE_REGEX = /\.(jpg|jpeg|png|gif)$/i;
 
-// This is abad code, but it works.
-chrome.storage.local.get("state").then(state => {
-	state = state.state;
-	chrome.action.setIcon({
+// State management
+let state = DEFAULT_STATE;
+
+// Browser API compatibility (Chrome vs Firefox)
+if (typeof browser === "undefined") {
+	globalThis.browser = chrome;
+}
+
+// Initialize state from storage
+async function initializeState() {
+	try {
+		const result = await browser.storage.local.get("state");
+		state = result.state || DEFAULT_STATE;
+		updateIcon(state);
+	} catch (error) {
+		console.error("Failed to initialize state:", error);
+		state = DEFAULT_STATE;
+	}
+}
+
+// Update extension icon based on state
+function updateIcon(iconState) {
+	const iconPath = iconState === "active" ? "icon-active.png" : "icon-sleeping.png";
+	browser.action.setIcon({
 		path: {
-			128: `icon-${state}.png`,
+			"16": "icon-16.png",
+			"48": "icon-48.png",
+			"128": iconPath,
 		},
+	}).catch(error => {
+		console.error("Failed to set icon:", error);
 	});
-});
+}
 
+// Update extension title based on state
+function updateTitle(iconState) {
+	const title = iconState === "active" ? EXTENSION_NAME : `${EXTENSION_NAME} (inactive)`;
+	browser.action.setTitle({ title }).catch(error => {
+		console.error("Failed to set title:", error);
+	});
+}
+
+// Save state to storage
+async function saveState() {
+	try {
+		await browser.storage.local.set({ state });
+	} catch (error) {
+		console.error("Failed to save state:", error);
+	}
+}
+
+// Script functions to inject into the page
 function shrinkImage() {
-	// get first image
-	const img = document.getElementsByTagName("img")[0];
-	img.setAttribute(
-		"style",
-		`width: ${img.width}; height: ${img.height}; margin: auto;`
-	);
+	const img = document.querySelector("img");
+	if (!img) return;
+	img.style.width = `${img.width}px`;
+	img.style.height = `${img.height}px`;
+	img.style.margin = "auto";
 }
 
 function enlargeImage() {
-	const img = document.getElementsByTagName("img")[0];
-	img.setAttribute("style", "width: 99vw; height: 99vh; object-fit: contain;");
+	const img = document.querySelector("img");
+	if (!img) return;
+	img.style.width = "99vw";
+	img.style.height = "99vh";
+	img.style.objectFit = "contain";
 }
 
-function callScript(tabId, imageFunc) {
-	chrome.scripting.executeScript({
-		target: { tabId },
-		imageFunc,
-	});
-}
+// Handle click on extension icon
+async function handleIconClick(tab) {
+	try {
+		const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+		const activeTab = tabs[0];
+		if (!activeTab || !activeTab.url || !activeTab.id) return;
 
-// add listener for action icon
-chrome.action.onClicked.addListener(async function (tab) {
-	const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-	const activeTab = tabs[0];
-	const tabUrl = activeTab.url;
-	const tabId = activeTab.id;
+		const tabUrl = activeTab.url;
+		const tabId = activeTab.id;
 
-	if (state === "active") {
-		state = "sleeping";
-		chrome.action.setIcon({
-			path: {
-				128: "icon-sleeping.png",
-			},
-		});
-		if (tabUrl.match(/\.(jpg|jpeg|png|gif)$/i)) {
-			chrome.scripting.executeScript({
+		// Toggle state
+		state = state === "active" ? "sleeping" : "active";
+
+		// Update UI
+		updateIcon(state);
+		updateTitle(state);
+
+		// If current tab is an image, resize it immediately
+		if (IMAGE_REGEX.test(tabUrl)) {
+			const func = state === "active" ? enlargeImage : shrinkImage;
+			await browser.scripting.executeScript({
 				target: { tabId },
-				func: shrinkImage,
+				func,
 			});
 		}
-		chrome.action.setTitle({ title: `${title}\n(inactive)` });
-		removeWebRequestListener();
-	} else {
-		state = "active";
-		chrome.action.setIcon({
-			path: {
-				128: "icon-active.png",
-			},
-		});
-		if (tabUrl.match(/\.(jpg|jpeg|png|gif)$/i)) {
-			console.log("enlarge");
-			chrome.scripting.executeScript({
-				target: { tabId },
-				func: enlargeImage,
-			});
-		}
-		chrome.action.setTitle({ title });
-		addWebRequestListener();
+
+		// Save state
+		await saveState();
+	} catch (error) {
+		console.error("Error handling icon click:", error);
 	}
-	chrome.storage.local.set({ state });
-	console.log("localstorage set");
-});
-
-function removeWebRequestListener() {
-	chrome.webRequest.onCompleted.removeListener(webRequestListener);
 }
 
-function webRequestListener(details) {
-	console.log("addWebRequestListener", details);
-	chrome.scripting.executeScript({
-		target: { tabId: details.tabId },
-		func: enlargeImage,
-	});
-}
+// Initialize on load
+initializeState();
 
-function addWebRequestListener() {
-	chrome.webRequest.onCompleted.addListener(webRequestListener, {
-		urls: ["*://*/*.jpg", "*://*/*.jpeg", "*://*/*.png", "*://*/*.gif"],
-		types: ["main_frame"],
-	});
-}
-
-addWebRequestListener();
-
-chrome.action.setIcon({
-	path: {
-		128: "icon-active.png",
-	},
-});
+// Add click listener
+browser.action.onClicked.addListener(handleIconClick);

@@ -1,16 +1,27 @@
 {
 	"name": "Fullsize Image",
-	"description": "Fullsize Image plugin makes your image fit to the browser's viewport.",
+	"short_name": "Fullsize",
+	"description": "Automatically resize images to fit your browser's viewport. Click the extension icon to toggle between active and sleeping states.",
 	"version": "1.0",
 	"manifest_version": 3,
 
-	"permissions": ["activeTab", "scripting", "webRequest", "storage"],
-	"host_permissions": ["https://*/*", "http://*/*"],
+	"permissions": ["activeTab", "scripting", "storage"],
+	"host_permissions": ["<all_urls>"],
 
 	"background": {
 		"service_worker": "action.js"
 	},
+
 	"action": {
-		"default_icon": { "128": "icon-active.png" }
+		"default_title": "Toggle image size",
+		"default_icon": {
+			"128": "icon-active.png"
+		}
+	},
+
+	"icons": {
+		"16": "icon-16.png",
+		"48": "icon-48.png",
+		"128": "icon-128.png"
 	}
 }
