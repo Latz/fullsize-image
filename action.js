@@ -95,6 +95,32 @@ async function handleIconClick(tab) {
 	}
 }
 
+// Handle messages from content scripts
+browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+	if (message.action === "openImageInNewTab" && message.url) {
+		// Open the image in a new tab
+		browser.tabs.create({ url: message.url })
+			.then(() => {
+				// Close the original tab after opening the new one
+				if (sender.tab && sender.tab.id) {
+					browser.tabs.remove(sender.tab.id)
+						.then(() => sendResponse({ success: true }))
+						.catch(error => {
+							console.error("Failed to close original tab:", error);
+							sendResponse({ success: true }); // Still success for opening
+						});
+				} else {
+					sendResponse({ success: true });
+				}
+			})
+			.catch(error => {
+				console.error("Failed to open image in new tab:", error);
+				sendResponse({ success: false });
+			});
+		return true; // Keep channel open for async response
+	}
+});
+
 // Initialize on load
 initializeState();
 

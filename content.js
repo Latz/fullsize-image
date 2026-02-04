@@ -45,6 +45,17 @@
 			subtree: true,
 		});
 
+		// Listen for image load events to re-check for dominant images
+		document.addEventListener('load', (event) => {
+			if (event.target.tagName === 'IMG') {
+				// An image just finished loading, re-check for dominant images
+				const images = document.querySelectorAll("img");
+				if (images.length > 1) {
+					checkForDominantImage(images);
+				}
+			}
+		}, true); // Use capture phase to catch all load events
+
 		// Also check immediately (for already loaded images)
 		// Use requestAnimationFrame to ensure DOM is ready
 		requestAnimationFrame(() => {
@@ -54,11 +65,50 @@
 		});
 	}
 
+	// Track if we've already opened a dominant image to avoid repeated opens
+	let dominantImageOpened = false;
+
+	function checkForDominantImage(images) {
+		if (!isActive || dominantImageOpened) return;
+
+		// Filter out images that haven't loaded yet
+		const loadedImages = Array.from(images).filter(img =>
+			img.complete && img.naturalWidth > 0 && img.naturalHeight > 0
+		);
+
+		if (loadedImages.length < 2) return;
+
+		// Calculate areas and sort by size
+		const imageData = loadedImages.map(img => ({
+			img,
+			area: img.naturalWidth * img.naturalHeight,
+			width: img.naturalWidth,
+			height: img.naturalHeight
+		})).sort((a, b) => b.area - a.area);
+
+		const largest = imageData[0];
+		const secondLargest = imageData[1];
+
+		// Check if one image is significantly larger (3x) and reasonably sized
+		const isSignificantlyLarger = largest.area >= (secondLargest.area * 3);
+		const isReasonablyLarge = largest.width >= 400 && largest.height >= 400;
+
+		if (isSignificantlyLarger && isReasonablyLarge) {
+			dominantImageOpened = true;
+			// Send message to background script to open in new tab
+			chrome.runtime.sendMessage({
+				action: "openImageInNewTab",
+				url: largest.img.src || largest.img.currentSrc
+			});
+		}
+	}
+
 	function checkAndEnlarge() {
 		const images = document.querySelectorAll("img");
 
-		// If not a single-image page, show all images immediately
+		// If not a single-image page, check for dominant image
 		if (images.length !== 1) {
+			checkForDominantImage(images);
 			images.forEach(img => {
 				img.style.visibility = "visible";
 			});
