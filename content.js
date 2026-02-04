@@ -56,6 +56,9 @@
 			}
 		}, true); // Use capture phase to catch all load events
 
+		// Check for any base64-encoded URL parameters and decode them
+		checkEncodedUrlParams();
+
 		// Also check immediately (for already loaded images)
 		// Use requestAnimationFrame to ensure DOM is ready
 		requestAnimationFrame(() => {
@@ -68,8 +71,113 @@
 	// Track if we've already opened a dominant image to avoid repeated opens
 	let dominantImageOpened = false;
 
+	// Try to decode a string using various base64 methods
+	function tryDecodeBase64(encodedStr) {
+		const results = [];
+
+		try {
+			// Remove any numeric prefix (like "101000")
+			const withoutPrefix = encodedStr.replace(/^\d{6}/, '');
+
+			// Method 1: Standard base64
+			try {
+				const decoded = atob(withoutPrefix);
+				if (isPrintableString(decoded)) {
+					results.push({ method: "standard base64", decoded: decoded });
+				}
+			} catch (e) {}
+
+			// Method 2: URL-safe base64
+			try {
+				const urlSafe = withoutPrefix.replace(/-/g, '+').replace(/_/g, '/');
+				const decoded = atob(urlSafe);
+				if (isPrintableString(decoded)) {
+					results.push({ method: "URL-safe base64", decoded: decoded });
+				}
+			} catch (e) {}
+
+			// Method 3: Custom alphabet (0-9A-Za-z) - common obfuscation
+			try {
+				const customAlphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+/";
+				const standardAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+				const translated = withoutPrefix.split('').map(c => {
+					const idx = customAlphabet.indexOf(c);
+					return idx >= 0 ? standardAlphabet[idx] : c;
+				}).join('');
+
+				const decoded = atob(translated);
+				if (isPrintableString(decoded)) {
+					// Try to parse structured data
+					const folderMatch = decoded.match(/folder_-_(.+?)_\._filename/);
+					const filenameMatch = decoded.match(/filename_-_(.+?)\//);
+
+					if (folderMatch && filenameMatch) {
+						results.push({
+							method: "custom base64 (0-9A-Za-z)",
+							decoded: decoded,
+							folder: folderMatch[1],
+							filename: filenameMatch[1],
+							fullPath: `${folderMatch[1]}/${filenameMatch[1]}`
+						});
+					} else {
+						results.push({ method: "custom base64 (0-9A-Za-z)", decoded: decoded });
+					}
+				}
+			} catch (e) {}
+
+		} catch (error) {}
+
+		return results;
+	}
+
+	// Check if a string contains mostly printable characters
+	function isPrintableString(str) {
+		if (!str || str.length < 3) return false;
+		const printableCount = str.split('').filter(c => {
+			const code = c.charCodeAt(0);
+			return (code >= 32 && code <= 126) || code === 10 || code === 13;
+		}).length;
+		return printableCount / str.length > 0.7; // At least 70% printable
+	}
+
+	// Check if a string looks like it could be base64
+	function looksLikeBase64(str) {
+		if (!str || str.length < 10) return false;
+		// Base64 uses A-Z, a-z, 0-9, +, /, -, _ and optional = padding
+		return /^[A-Za-z0-9+/\-_]+=*$/.test(str);
+	}
+
+	// Check all URL parameters for base64-encoded strings
+	function checkEncodedUrlParams() {
+		const urlParams = new URLSearchParams(window.location.search);
+		const decodedParams = [];
+
+		for (const [key, value] of urlParams) {
+			if (looksLikeBase64(value)) {
+				const results = tryDecodeBase64(value);
+				if (results.length > 0) {
+					decodedParams.push({
+						param: key,
+						original: value,
+						decoded: results
+					});
+					console.log(`Decoded parameter "${key}":`, results);
+				}
+			}
+		}
+
+		return decodedParams;
+	}
+
 	function checkForDominantImage(images) {
 		if (!isActive || dominantImageOpened) return;
+
+		// Check for any base64-encoded URL parameters
+		const decodedParams = checkEncodedUrlParams();
+		if (decodedParams.length > 0) {
+			console.log("Page contains encoded URL parameters:", decodedParams);
+		}
 
 		// Filter out images that haven't loaded yet
 		const loadedImages = Array.from(images).filter(img =>
@@ -95,11 +203,41 @@
 
 		if (isSignificantlyLarger && isReasonablyLarge) {
 			dominantImageOpened = true;
-			// Send message to background script to open in new tab
-			chrome.runtime.sendMessage({
-				action: "openImageInNewTab",
-				url: largest.img.src || largest.img.currentSrc
-			});
+
+			// Convert image to data URL to cache it (avoid reloading from source)
+			const canvas = document.createElement('canvas');
+			canvas.width = largest.img.naturalWidth;
+			canvas.height = largest.img.naturalHeight;
+			const ctx = canvas.getContext('2d');
+
+			try {
+				ctx.drawImage(largest.img, 0, 0);
+				const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+
+				// Log decoded URL info if available
+				if (decodedParams.length > 0) {
+					decodedParams.forEach(param => {
+						param.decoded.forEach(result => {
+							if (result.fullPath) {
+								console.log(`Extracting dominant image from encoded page (${param.param}):`, result.fullPath);
+							}
+						});
+					});
+				}
+
+				// Send message to background script to open in new tab with cached data
+				chrome.runtime.sendMessage({
+					action: "openImageInNewTab",
+					url: dataUrl
+				});
+			} catch (error) {
+				// CORS error or other issue - fall back to original URL
+				console.log("Could not cache image (CORS?), using original URL");
+				chrome.runtime.sendMessage({
+					action: "openImageInNewTab",
+					url: largest.img.src || largest.img.currentSrc
+				});
+			}
 		}
 	}
 
