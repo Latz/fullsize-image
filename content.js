@@ -77,15 +77,33 @@
 		const src = img.src || img.currentSrc || window.location.href;
 		const isLikelyLogo = /\b(logo|icon|favicon|badge|button|banner)\b/i.test(src);
 
-		// Only enlarge if image has reasonable dimensions and is not a logo
-		if (img.naturalWidth > 50 && img.naturalHeight > 50 && !isLikelyLogo) {
+		// Check for lazy-loaded images that haven't appeared yet
+		const hasLazyImages = document.querySelector('[data-src], [data-lazy], [loading="lazy"], .lazyload, .lazy');
+
+		// Check if this is a real webpage (not just a direct image file)
+		// Direct image files have minimal DOM: html > body > img
+		const bodyChildren = document.body.children;
+		const isWebpage = bodyChildren.length > 1 ||
+			(bodyChildren.length === 1 && bodyChildren[0].tagName !== 'IMG');
+
+		// Don't enlarge if:
+		// - Image is a logo/icon
+		// - There are lazy-loaded images waiting to appear
+		// - This is a webpage with content (not a direct image file)
+		if (isLikelyLogo || hasLazyImages || isWebpage) {
+			img.style.visibility = "visible";
+			return;
+		}
+
+		// Only enlarge if image has reasonable dimensions
+		if (img.naturalWidth > 50 && img.naturalHeight > 50) {
 			// Check if it's not already enlarged
 			const currentStyle = window.getComputedStyle(img);
 			if (currentStyle.width !== "99vw") {
 				applyEnlargeStyles(img);
 			}
 		} else {
-			// Image too small or is a logo, show it normally
+			// Image too small, show it normally
 			img.style.visibility = "visible";
 		}
 	}
