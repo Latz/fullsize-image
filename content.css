@@ -1,14 +1,22 @@
-/* Set black background immediately to prevent white flash */
+/* Set black background immediately on all pages to prevent white flash on image pages */
 html, body {
 	background-color: #000 !important;
 	margin: 0 !important;
 	padding: 0 !important;
 	min-height: 100vh !important;
+}
+
+/* Hide overflow only when actively enlarging a single image */
+html.enlarge-single-image, html.enlarge-single-image body {
 	overflow: hidden !important;
 }
 
-/* Hide images only during the enlargement process */
-/* This gets toggled by content script - removed when enlargement is complete */
-html.enlarge-single-image img:not([style*="visibility: visible"]) {
+/* Hide all images by default to prevent flash, script will show them when ready */
+img {
 	visibility: hidden !important;
+}
+
+/* Show images that have been explicitly marked as visible by the script */
+img[style*="visibility: visible"], img[style*="visibility:visible"] {
+	visibility: visible !important;
 }

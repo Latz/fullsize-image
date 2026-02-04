@@ -55,22 +55,38 @@
 	}
 
 	function checkAndEnlarge() {
-		if (!isActive) return;
-
 		const images = document.querySelectorAll("img");
 
-		// Only process if there's exactly one image on the page
-		if (images.length !== 1) return;
+		// If not a single-image page, show all images immediately
+		if (images.length !== 1) {
+			images.forEach(img => {
+				img.style.visibility = "visible";
+			});
+			return;
+		}
+
+		if (!isActive) {
+			// Extension is not active, show the image normally
+			images[0].style.visibility = "visible";
+			return;
+		}
 
 		const img = images[0];
 
-		// Only enlarge if image has reasonable dimensions
-		if (img.naturalWidth > 50 && img.naturalHeight > 50) {
+		// Check if the image is likely a logo/icon based on filename or URL
+		const src = img.src || img.currentSrc || window.location.href;
+		const isLikelyLogo = /\b(logo|icon|favicon|badge|button|banner)\b/i.test(src);
+
+		// Only enlarge if image has reasonable dimensions and is not a logo
+		if (img.naturalWidth > 50 && img.naturalHeight > 50 && !isLikelyLogo) {
 			// Check if it's not already enlarged
 			const currentStyle = window.getComputedStyle(img);
 			if (currentStyle.width !== "99vw") {
 				applyEnlargeStyles(img);
 			}
+		} else {
+			// Image too small or is a logo, show it normally
+			img.style.visibility = "visible";
 		}
 	}
 
@@ -119,6 +135,7 @@
 		img.style.top = "";
 		img.style.left = "";
 		img.style.background = "";
+		img.style.visibility = "visible";
 	}
 
 	function enlargeImage() {
