@@ -126,3 +126,5 @@ initializeState();
 
 // Add click listener
 browser.action.onClicked.addListener(handleIconClick);
+
+export { updateIcon, updateTitle, handleIconClick };
