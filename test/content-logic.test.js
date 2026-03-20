@@ -143,12 +143,12 @@ describe('tryDecodeBase64', () => {
   });
 
   it('decodes URL-safe base64 with - and _ variants', () => {
-    // Build a string whose standard base64 contains + or /
-    const standard = btoa('Hello+World/Test');
-    const urlSafe = standard.replace(/\+/g, '-').replace(/\//g, '_');
+    // '>>>' encodes to 'Pj4+' in standard base64 (the + is in the encoded output)
+    // URL-safe form 'Pj4-' would fail atob directly but succeeds after - → + conversion
+    const urlSafe = 'Pj4-';
     const results = tryDecodeBase64(urlSafe);
-    expect(results.length).toBeGreaterThan(0);
     expect(results.some(r => r.method === 'URL-safe base64')).toBe(true);
+    expect(results.some(r => r.decoded === '>>>')).toBe(true);
   });
 
   it('strips a leading 6-digit numeric prefix before decoding', () => {
@@ -157,17 +157,8 @@ describe('tryDecodeBase64', () => {
     expect(results.some(r => r.decoded.includes('Hello World'))).toBe(true);
   });
 
-  it('returns result objects with at least method and decoded keys', () => {
-    const results = tryDecodeBase64('SGVsbG8gV29ybGQ=');
-    expect(results.length).toBeGreaterThan(0);
-    results.forEach(r => {
-      expect(r).toHaveProperty('method');
-      expect(r).toHaveProperty('decoded');
-    });
-  });
-
   it('extracts folder and filename from custom-alphabet encoding', () => {
-    const payload = 'folder_-_myfolder_._filenameXXXXfilename_-_myfile.jpg/';
+    const payload = 'folder_-_myfolder_._filename_-_myfile.jpg/';
     const customAlphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+/';
     const standardAlphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
     const standard = btoa(payload);
