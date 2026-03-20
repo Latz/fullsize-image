@@ -1,6 +1,6 @@
 // test/content-logic.test.js
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { isBackgroundStyleImage, isSvgImage, isPrintableString, looksLikeBase64, tryDecodeBase64 } from '../content-logic.js';
+import { isBackgroundStyleImage, isSvgImage, isPrintableString, looksLikeBase64, tryDecodeBase64, findDominantImage } from '../content-logic.js';
 
 // Helper: create img element appended to body with optional inline styles
 function makeImg({ objectFit = '', position = '', src = 'https://example.com/photo.jpg' } = {}) {
@@ -173,5 +173,141 @@ describe('tryDecodeBase64', () => {
     expect(customResult.folder).toBe('myfolder');
     expect(customResult.filename).toBe('myfile.jpg');
     expect(customResult.fullPath).toBe('myfolder/myfile.jpg');
+  });
+});
+
+/**
+ * Creates a mock img element with the given pixel dimensions and src.
+ * getBoundingClientRect returns 0×0 by default so isBackgroundStyleImage
+ * will not flag these as background images.
+ */
+function makeLoadedImg({
+  naturalWidth = 800,
+  naturalHeight = 600,
+  src = 'https://example.com/photo.jpg',
+} = {}) {
+  const img = document.createElement('img');
+  Object.defineProperty(img, 'naturalWidth', { value: naturalWidth, configurable: true });
+  Object.defineProperty(img, 'naturalHeight', { value: naturalHeight, configurable: true });
+  Object.defineProperty(img, 'complete', { value: true, configurable: true });
+  Object.defineProperty(img, 'src', { value: src, configurable: true });
+  Object.defineProperty(img, 'currentSrc', { value: src, configurable: true });
+  Object.defineProperty(img, 'getBoundingClientRect', {
+    value: () => ({ width: 0, height: 0 }),
+    configurable: true,
+  });
+  return img;
+}
+
+describe('findDominantImage', () => {
+  beforeEach(() => {
+    Object.defineProperty(window, 'innerWidth', { value: 1024, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: 768, configurable: true });
+    // isBackgroundStyleImage (called by findDominantImage) uses getComputedStyle;
+    // stub it so all non-background test elements pass through cleanly.
+    vi.spyOn(window, 'getComputedStyle').mockImplementation(() => ({ objectFit: '', position: '' }));
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+    vi.restoreAllMocks();
+  });
+
+  it('returns null when fewer than 2 meaningful images', () => {
+    // Only 1 image after filtering — cannot determine dominance
+    expect(findDominantImage([makeLoadedImg({ naturalWidth: 800, naturalHeight: 600 })])).toBeNull();
+  });
+
+  it('returns null when all images cluster together (gallery — largest inside cluster)', () => {
+    // 6 images all 300×200 = 60,000px² — median=60,000, clusterCount=6 ≥4, largest inside cluster
+    const imgs = Array.from({ length: 6 }, () =>
+      makeLoadedImg({ naturalWidth: 300, naturalHeight: 200 })
+    );
+    expect(findDominantImage(imgs)).toBeNull();
+  });
+
+  it('returns null when largest is within 2.5× of median (still inside cluster)', () => {
+    // 4 at 300×200 (60,000) + 1 at 400×300 (120,000 = 2.0× median) — within 2.5× threshold
+    const imgs = [
+      makeLoadedImg({ naturalWidth: 400, naturalHeight: 300 }),
+      ...Array.from({ length: 4 }, () => makeLoadedImg({ naturalWidth: 300, naturalHeight: 200 })),
+    ];
+    expect(findDominantImage(imgs)).toBeNull();
+  });
+
+  it('returns dominant image when gallery cluster exists but largest is a clear outlier', () => {
+    // 5 thumbnails at 150×100 (15,000px²) + 1 main at 800×600 (480,000px²)
+    // median=15,000; 480,000 >= 15,000×3×2=90,000 ✓; 800×600 >= 400×400 ✓
+    const main = makeLoadedImg({
+      naturalWidth: 800,
+      naturalHeight: 600,
+      src: 'https://example.com/main.jpg',
+    });
+    const thumbnails = Array.from({ length: 5 }, () =>
+      makeLoadedImg({ naturalWidth: 150, naturalHeight: 100 })
+    );
+    expect(findDominantImage([main, ...thumbnails])).toBe(main);
+  });
+
+  it('returns dominant image when no gallery cluster and largest exceeds ratio', () => {
+    // 800×600 (480,000) vs 200×150 (30,000); 480,000/30,000=16 ≥3 ✓; 800×600 ≥400×400 ✓
+    const large = makeLoadedImg({ naturalWidth: 800, naturalHeight: 600 });
+    const small = makeLoadedImg({ naturalWidth: 200, naturalHeight: 150 });
+    expect(findDominantImage([large, small])).toBe(large);
+  });
+
+  it('returns null when largest passes area ratio but is smaller than 400×400 (isReasonablyLarge gate)', () => {
+    // 300×300 (90,000) vs 100×100 (10,000); 90,000/10,000=9 ≥3, but 300 < 400 ✗
+    const large = makeLoadedImg({ naturalWidth: 300, naturalHeight: 300 });
+    const small = makeLoadedImg({ naturalWidth: 100, naturalHeight: 100 });
+    expect(findDominantImage([large, small])).toBeNull();
+  });
+
+  it('excludes SVG images from candidates', () => {
+    // SVG excluded → only 1 meaningful image remains → null
+    const svg = makeLoadedImg({
+      naturalWidth: 800,
+      naturalHeight: 600,
+      src: 'https://example.com/icon.svg',
+    });
+    const small = makeLoadedImg({ naturalWidth: 200, naturalHeight: 150 });
+    expect(findDominantImage([svg, small])).toBeNull();
+  });
+
+  it('excludes background-style images (object-fit: cover) from candidates', () => {
+    const bg = makeLoadedImg({ naturalWidth: 1920, naturalHeight: 1080 });
+    bg.style.objectFit = 'cover';
+    document.body.appendChild(bg);
+    // Stub getComputedStyle to reflect inline style (jsdom may not cascade objectFit)
+    vi.spyOn(window, 'getComputedStyle').mockImplementation(el => ({
+      objectFit: el.style.objectFit || '',
+      position: el.style.position || '',
+    }));
+    const small = makeLoadedImg({ naturalWidth: 200, naturalHeight: 150 });
+    expect(findDominantImage([bg, small])).toBeNull();
+    vi.restoreAllMocks();
+  });
+
+  it('excludes images with area <2500px² from cluster analysis', () => {
+    // 15 tiny images (40×40=1,600px², below 2,500 threshold) + 1 large
+    // After filtering: only 1 meaningful image → null
+    const tiny = Array.from({ length: 15 }, () =>
+      makeLoadedImg({ naturalWidth: 40, naturalHeight: 40 })
+    );
+    const large = makeLoadedImg({ naturalWidth: 800, naturalHeight: 600 });
+    expect(findDominantImage([...tiny, large])).toBeNull();
+  });
+
+  it('returns null when dominantRatio is set high enough to prevent match', () => {
+    // 480,000 / 30,000 = 16; ratio=20 → 16 < 20 → null
+    const large = makeLoadedImg({ naturalWidth: 800, naturalHeight: 600 });
+    const small = makeLoadedImg({ naturalWidth: 200, naturalHeight: 150 });
+    expect(findDominantImage([large, small], { dominantRatio: 20 })).toBeNull();
+  });
+
+  it('returns dominant when dominantRatio is default (3)', () => {
+    const large = makeLoadedImg({ naturalWidth: 800, naturalHeight: 600 });
+    const small = makeLoadedImg({ naturalWidth: 200, naturalHeight: 150 });
+    expect(findDominantImage([large, small], { dominantRatio: 3 })).toBe(large);
   });
 });

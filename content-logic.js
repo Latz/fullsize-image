@@ -98,3 +98,66 @@ export function tryDecodeBase64(encodedStr) {
   } catch (error) {}
   return results;
 }
+
+/**
+ * Analyzes a list of img elements and returns the single dominant image, or null.
+ *
+ * "Dominant" means one image is significantly larger than all others:
+ * - On gallery pages (4+ images of similar size), only returns an image if it's a
+ *   clear outlier above the cluster (>= medianArea × dominantRatio × 2).
+ * - On non-gallery pages, largest must be >= secondLargest × dominantRatio.
+ * - The winner must also be at least 400×400px.
+ *
+ * Excludes: SVGs, background-style images, and images < 2,500px².
+ *
+ * @param {HTMLImageElement[]} imageElements
+ * @param {{ dominantRatio?: number }} opts
+ * @returns {HTMLImageElement|null}
+ */
+export function findDominantImage(imageElements, { dominantRatio = 3 } = {}) {
+  // Filter: loaded, non-SVG, non-background
+  const loadedImages = imageElements.filter(img => {
+    if (!img.complete || img.naturalWidth === 0 || img.naturalHeight === 0) return false;
+    if (isSvgImage(img)) return false;
+    if (isBackgroundStyleImage(img)) return false;
+    return true;
+  });
+
+  if (loadedImages.length < 2) return null;
+
+  // Sort by area descending
+  const imageData = loadedImages.map(img => ({
+    img,
+    area: img.naturalWidth * img.naturalHeight,
+    width: img.naturalWidth,
+    height: img.naturalHeight,
+  })).sort((a, b) => b.area - a.area);
+
+  // Filter out tiny images (tracking pixels, icons < 2,500px²) from cluster analysis
+  const meaningfulImages = imageData.filter(d => d.area >= 2500);
+  if (meaningfulImages.length < 2) return null;
+
+  const largest = meaningfulImages[0];
+  const secondLargest = meaningfulImages[1];
+
+  // Detect gallery cluster (4+ images within 0.4–2.5× of median area)
+  const sortedAreas = meaningfulImages.map(d => d.area).sort((a, b) => a - b);
+  const medianArea = sortedAreas[Math.floor(sortedAreas.length / 2)];
+  const clusterCount = meaningfulImages.filter(d =>
+    d.area >= medianArea * 0.4 && d.area <= medianArea * 2.5
+  ).length;
+  const isGalleryCluster = clusterCount >= 4;
+
+  let isSignificantlyLarger;
+  if (isGalleryCluster) {
+    // Gallery: largest must be a clear outlier above the cluster
+    if (largest.area <= medianArea * 2.5) return null; // largest is just another thumbnail
+    isSignificantlyLarger = largest.area >= medianArea * dominantRatio * 2;
+  } else {
+    isSignificantlyLarger = largest.area >= secondLargest.area * dominantRatio;
+  }
+
+  const isReasonablyLarge = largest.width >= 400 && largest.height >= 400;
+
+  return (isSignificantlyLarger && isReasonablyLarge) ? largest.img : null;
+}
