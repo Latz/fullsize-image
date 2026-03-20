@@ -1,6 +1,6 @@
 // test/content-logic.test.js
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { isBackgroundStyleImage, isSvgImage, isPrintableString, looksLikeBase64, tryDecodeBase64, findDominantImage } from '../content-logic.js';
+import { isBackgroundStyleImage, isSvgImage, isPrintableString, looksLikeBase64, tryDecodeBase64, findDominantImage, applyEnlargeStyles, showAllImages } from '../content-logic.js';
 
 // Helper: create img element appended to body with optional inline styles
 function makeImg({ objectFit = '', position = '', src = 'https://example.com/photo.jpg' } = {}) {
@@ -309,5 +309,76 @@ describe('findDominantImage', () => {
     const large = makeLoadedImg({ naturalWidth: 800, naturalHeight: 600 });
     const small = makeLoadedImg({ naturalWidth: 200, naturalHeight: 150 });
     expect(findDominantImage([large, small], { dominantRatio: 3 })).toBe(large);
+  });
+});
+
+describe('applyEnlargeStyles', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+    document.documentElement.classList.remove('enlarge-single-image');
+  });
+
+  it('sets width, height, objectFit, position, and zIndex on the image', () => {
+    const img = document.createElement('img');
+    document.body.appendChild(img);
+    applyEnlargeStyles(img);
+    expect(img.style.width).toBe('99vw');
+    expect(img.style.height).toBe('99vh');
+    expect(img.style.objectFit).toBe('contain');
+    expect(img.style.position).toBe('fixed');
+    expect(img.style.zIndex).toBe('9999');
+  });
+
+  it('sets top, left, background, margin, padding, border', () => {
+    const img = document.createElement('img');
+    document.body.appendChild(img);
+    applyEnlargeStyles(img);
+    expect(img.style.top).toBe('0px');
+    expect(img.style.left).toBe('0px');
+    expect(img.style.background).toBe('rgb(0, 0, 0)');
+    expect(img.style.margin).toBe('0px');
+    expect(img.style.padding).toBe('0px');
+    // jsdom does not support 'border: none' — setting it leaves the property empty
+    expect(img.style.border).toBe('');
+  });
+
+  it('adds enlarge-single-image class to document.documentElement', () => {
+    const img = document.createElement('img');
+    document.body.appendChild(img);
+    applyEnlargeStyles(img);
+    expect(document.documentElement.classList.contains('enlarge-single-image')).toBe(true);
+  });
+
+  it('sets visibility to visible after rAF (synchronous in tests due to stub)', () => {
+    const img = document.createElement('img');
+    document.body.appendChild(img);
+    // requestAnimationFrame is stubbed in setup.js as vi.fn(cb => cb()) — runs synchronously
+    applyEnlargeStyles(img);
+    expect(img.style.visibility).toBe('visible');
+  });
+});
+
+describe('showAllImages', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('sets visibility:visible on all existing img elements', () => {
+    const img1 = document.createElement('img');
+    const img2 = document.createElement('img');
+    document.body.appendChild(img1);
+    document.body.appendChild(img2);
+    showAllImages();
+    expect(img1.style.visibility).toBe('visible');
+    expect(img2.style.visibility).toBe('visible');
+  });
+
+  it('sets visibility:visible on img elements added after the call', async () => {
+    showAllImages();
+    const img = document.createElement('img');
+    document.body.appendChild(img);
+    // jsdom MutationObserver fires as a microtask — flush before asserting
+    await Promise.resolve();
+    expect(img.style.visibility).toBe('visible');
   });
 });

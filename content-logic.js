@@ -161,3 +161,46 @@ export function findDominantImage(imageElements, { dominantRatio = 3 } = {}) {
 
   return (isSignificantlyLarger && isReasonablyLarge) ? largest.img : null;
 }
+
+/**
+ * Applies full-viewport enlargement styles to a single image.
+ * Adds 'enlarge-single-image' class to <html> and reveals the image
+ * after a double requestAnimationFrame to avoid flash.
+ */
+export function applyEnlargeStyles(img) {
+  document.documentElement.classList.add('enlarge-single-image');
+  img.style.width = '99vw';
+  img.style.height = '99vh';
+  img.style.objectFit = 'contain';
+  img.style.zIndex = '9999';
+  img.style.position = 'fixed';
+  img.style.top = '0';
+  img.style.left = '0';
+  img.style.background = '#000';
+  img.style.margin = '0';
+  img.style.padding = '0';
+  img.style.border = 'none';
+  void img.offsetWidth;
+  void img.offsetHeight;
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      img.style.visibility = 'visible';
+    });
+  });
+}
+
+/**
+ * Sets visibility:visible on all current and future <img> elements.
+ * Used when the extension is disabled to undo the default CSS hide rule.
+ */
+export function showAllImages() {
+  document.querySelectorAll('img').forEach(img => {
+    img.style.visibility = 'visible';
+  });
+  const observer = new MutationObserver(() => {
+    document.querySelectorAll('img').forEach(img => {
+      img.style.visibility = 'visible';
+    });
+  });
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+}
