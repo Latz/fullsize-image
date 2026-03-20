@@ -193,14 +193,18 @@ export function applyEnlargeStyles(img) {
  * Sets visibility:visible on all current and future <img> elements.
  * Used when the extension is disabled to undo the default CSS hide rule.
  */
+let _showAllImagesObserver = null;
+
 export function showAllImages() {
   document.querySelectorAll('img').forEach(img => {
     img.style.visibility = 'visible';
   });
-  const observer = new MutationObserver(() => {
-    document.querySelectorAll('img').forEach(img => {
-      img.style.visibility = 'visible';
+  if (!_showAllImagesObserver) {
+    _showAllImagesObserver = new MutationObserver(() => {
+      document.querySelectorAll('img').forEach(img => {
+        img.style.visibility = 'visible';
+      });
     });
-  });
-  observer.observe(document.documentElement, { childList: true, subtree: true });
+    _showAllImagesObserver.observe(document.documentElement, { childList: true, subtree: true });
+  }
 }

@@ -24,7 +24,8 @@
 	],
 
 	"action": {
-		"default_title": "Toggle image size",
+		"default_title": "Fullsize Image Settings",
+		"default_popup": "popup.html",
 		"default_icon": {
 			"128": "icon-active.png"
 		}
@@ -34,5 +35,7 @@
 		"16": "icon-16.png",
 		"48": "icon-48.png",
 		"128": "icon-128.png"
-	}
+	},
+
+	"options_page": "options.html"
 }
