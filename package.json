@@ -1,0 +1,14 @@
+{
+  "name": "fullsize-image",
+  "version": "1.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "vitest",
+    "test:run": "vitest run"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0",
+    "vitest": "^3.0.0",
+    "jsdom": "^26.0.0"
+  }
+}
