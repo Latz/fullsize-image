@@ -18,7 +18,8 @@
 			"css": ["content.css"],
 			"js": ["content.js"],
 			"run_at": "document_start",
-			"match_about_blank": true
+			"match_about_blank": true,
+			"type": "module"
 		}
 	],
 
