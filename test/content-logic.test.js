@@ -13,9 +13,12 @@ function makeImg({ objectFit = '', position = '', src = 'https://example.com/pho
     value: () => ({ width: 0, height: 0 }),
     configurable: true,
   });
-  document.body.appendChild(img);
   return img;
 }
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('isBackgroundStyleImage', () => {
   beforeEach(() => {
@@ -46,6 +49,25 @@ describe('isBackgroundStyleImage', () => {
     expect(isBackgroundStyleImage(img)).toBe(true);
   });
 
+  it('returns true when position is absolute and covers >50% of viewport', () => {
+    const img = makeImg({ position: 'absolute' });
+    Object.defineProperty(img, 'getBoundingClientRect', {
+      value: () => ({ width: 1000, height: 700 }),
+      configurable: true,
+    });
+    expect(isBackgroundStyleImage(img)).toBe(true);
+  });
+
+  it('returns false when position is fixed but covers ≤50% of viewport', () => {
+    const img = makeImg({ position: 'fixed' });
+    // 800×400 = 320,000 / 786,432 ≈ 40% — below the 50% threshold
+    Object.defineProperty(img, 'getBoundingClientRect', {
+      value: () => ({ width: 800, height: 400 }),
+      configurable: true,
+    });
+    expect(isBackgroundStyleImage(img)).toBe(false);
+  });
+
   it('returns false for a normal in-flow image', () => {
     const img = makeImg();
     expect(isBackgroundStyleImage(img)).toBe(false);
@@ -74,13 +96,8 @@ describe('isSvgImage', () => {
     expect(isSvgImage(img)).toBe(true);
   });
 
-  it('returns false for .jpg URL', () => {
+  it('returns false for a non-SVG URL', () => {
     const img = makeImg({ src: 'https://example.com/photo.jpg' });
-    expect(isSvgImage(img)).toBe(false);
-  });
-
-  it('returns false for .png URL', () => {
-    const img = makeImg({ src: 'https://example.com/image.png' });
     expect(isSvgImage(img)).toBe(false);
   });
 });
